@@ -52,12 +52,14 @@ class AudioCache {
   ///
   /// Defaults to false, meaning the audio will be paused while playing on iOS and continue playing on Android.
   bool duckAudio;
+  bool isLocal;
 
   AudioCache({
     this.prefix = 'assets/',
     this.fixedPlayer,
     this.respectSilence = false,
     this.duckAudio = false,
+    this.isLocal = false,
   });
 
   /// Clears the cache for the file [fileName].
@@ -97,6 +99,19 @@ class AudioCache {
     return file.uri;
   }
 
+  Future<Uri> fetchToMemoryFromLocal(String fileName) async {
+    if (kIsWeb) {
+      final uri = _sanitizeURLForWeb(fileName);
+      // We rely on browser caching here. Once the browser downloads this file,
+      // the native side implementation should be able to access it from cache.
+      await http.get(uri);
+      return uri;
+    }
+
+    final file = File(fileName);
+    return file.uri;
+  }
+
   Uri _sanitizeURLForWeb(String fileName) {
     final tryAbsolute = Uri.tryParse(fileName);
     if (tryAbsolute?.isAbsolute == true) {
@@ -112,7 +127,11 @@ class AudioCache {
   /// Also returns a [Future] to access that file.
   Future<Uri> load(String fileName) async {
     if (!loadedFiles.containsKey(fileName)) {
-      loadedFiles[fileName] = await fetchToMemory(fileName);
+      if (isLocal) {
+        loadedFiles[fileName] = await fetchToMemoryFromLocal(fileName);
+      } else {
+        loadedFiles[fileName] = await fetchToMemory(fileName);
+      }
     }
     return loadedFiles[fileName]!;
   }
